@@ -177,9 +177,8 @@ def consultar_rag(pergunta, top_k=5):
         temperature=0.2,
     )
 
-    print("\n🧠 Resposta:")
-    print(resposta.choices[0].message.content.strip())
-    print("\n" + "=" * 70 + "\n")
+    texto_resposta = resposta.choices[0].message.content.strip()
+    return texto_resposta
 
 
 
