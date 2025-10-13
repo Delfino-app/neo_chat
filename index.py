@@ -1,65 +1,84 @@
 from openai import OpenAI
 import chromadb
 import pandas as pd
-import tiktoken 
-from datetime import datetime
+import tiktoken
+import sqlite3
 import os
-import shutil
+from datetime import datetime
 from dotenv import load_dotenv
+from getRequests import atualizar_db_com_wp
+from storage import load_posts
 
 load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
 if not OPENAI_API_KEY:
     raise ValueError("⚠️ A variável OPENAI_API_KEY não foi encontrada no .env!")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# Limpa o banco vetorial (apenas se desejar reiniciar tudo)
-if os.path.exists("./chroma_db"):
-    print("🧹 Limpando banco vetorial existente...")
-    shutil.rmtree("./chroma_db", ignore_errors=True)
-
-# Banco vetorial local (persistência na pasta ./chroma_db)
+# Banco vetorial local (persistência em ./chroma_db)
 chroma_client = chromadb.PersistentClient(path="./chroma_db")
 collection = chroma_client.get_or_create_collection("artigos_demo")
 
+# Tokenizer para dividir textos longos
+tokenizer = tiktoken.get_encoding("cl100k_base")
+
+
 # =====================================
-# 🧠 FUNÇÕES AUXILIARES
+# 🧩 FUNÇÕES AUXILIARES
 # =====================================
 
-# 👉 Formatar datas em Y-m-d
 def formatar_data(data_str):
+    """Converte datas para o formato YYYY-MM-DD."""
     formatos = ["%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"]
     for fmt in formatos:
         try:
             return datetime.strptime(data_str, fmt).strftime("%Y-%m-%d")
         except ValueError:
             pass
-    return data_str  # caso não consiga converter
+    return data_str
 
-# 👉 Dividir textos longos em partes menores
-tokenizer = tiktoken.get_encoding("cl100k_base")
 
 def dividir_em_chunks(texto, max_tokens=800):
+    """Divide textos longos em blocos menores para embeddings."""
     tokens = tokenizer.encode(texto)
-    chunks = []
-    for i in range(0, len(tokens), max_tokens):
-        trecho = tokenizer.decode(tokens[i:i + max_tokens])
-        chunks.append(trecho)
-    return chunks
+    return [tokenizer.decode(tokens[i:i + max_tokens]) for i in range(0, len(tokens), max_tokens)]
+
 
 # =====================================
-# 📄 CARREGAR CSV E POPULAR CHROMA
+# 📰 ATUALIZAÇÃO AUTOMÁTICA DO BANCO
 # =====================================
-df = pd.read_csv("artigos.csv")
-print(f"📰 Carregando {len(df)} artigos...")
+def updatePostsDB(page=1):
+    print("Atualizando banco de matérias a partir do WordPress...")
+    try:
+        atualizar_db_com_wp(page)
+    except Exception as e:
+        print(f"Erro ao atualizar matérias: {e}")
 
-if collection.count() == 0:
-    print("⚙️ Gerando embeddings e populando o banco...")
-    for i, row in df.iterrows():
-        doc_id = f"artigo-{i}"  # 🔹 identificador único por artigo
+
+# =====================================
+# 💾 POPULAR CHROMA (INDEXAÇÃO RAG)
+# =====================================
+def popular_chroma(df):
+    existentes = collection.count()
+    novos = 0
+
+    if existentes == 0:
+        print("⚙️ Banco vetorial vazio. Criando embeddings...")
+    else:
+        print(f"ℹ️ Banco vetorial já contém {existentes} vetores. Verificando novos artigos...")
+
+    for _, row in df.iterrows():
+        doc_id = str(row["doc_id"]).strip()
+        if not doc_id:
+            continue
+
+        # Verifica se o artigo já foi indexado no Chroma (pelo doc_id)
+        existentes_doc = collection.get(where={"doc_id": doc_id})
+        if existentes_doc and existentes_doc.get("ids"):
+            continue  # já existe
+
         full_text = (
             f"Título: {row['titulo']}\n"
             f"Autor: {row['autor']}\n"
@@ -68,7 +87,7 @@ if collection.count() == 0:
             f"{row['conteudo']}"
         )
 
-        # divide em blocos (caso o conteúdo seja longo)
+        # Divide o conteúdo e gera embeddings
         for j, chunk in enumerate(dividir_em_chunks(full_text)):
             emb = client.embeddings.create(
                 model="text-embedding-3-small",
@@ -87,20 +106,30 @@ if collection.count() == 0:
                     "link": row["link"]
                 }]
             )
-    print("✅ Embeddings salvos no banco vetorial.")
-else:
-    print(f"ℹ️ Banco vetorial já contém {collection.count()} vetores. Pulando criação.")
+
+        novos += 1
+
+    print(f"✅ Embeddings atualizados. {novos} novos artigos adicionados ao Chroma.")
+
+df = load_posts()
+popular_chroma(df)
+
 
 # =====================================
 # 🔍 CONSULTA RAG
 # =====================================
+
+def getPrompt(caminho="prompt.txt"):
+    with open(caminho, "r", encoding="utf-8") as f:
+        return f.read()
+
 def consultar_rag(pergunta, top_k=5):
+    """Executa busca semântica e responde com base nas matérias indexadas."""
     q_emb = client.embeddings.create(
         model="text-embedding-3-small",
         input=pergunta
     ).data[0].embedding
 
-    # Pega mais resultados brutos (garante artigos suficientes após deduplicar)
     resultados = collection.query(
         query_embeddings=[q_emb],
         n_results=top_k * 3
@@ -123,7 +152,6 @@ def consultar_rag(pergunta, top_k=5):
         if not doc_id or not link:
             continue
 
-        # 🔹 Evita duplicatas por doc_id ou link
         if doc_id in artigos_unicos or link in links_vistos:
             continue
 
@@ -136,7 +164,6 @@ def consultar_rag(pergunta, top_k=5):
         }
         links_vistos.add(link)
 
-        # 🔹 Interrompe quando já tem top_k artigos únicos
         if len(artigos_unicos) >= top_k:
             break
 
@@ -144,12 +171,10 @@ def consultar_rag(pergunta, top_k=5):
         print("🧠 Resposta: Nenhum artigo relevante encontrado.")
         return
 
-    # 🔹 Monta o contexto final
     contexto = ""
     for artigo in artigos_unicos.values():
         resumo = artigo['texto'].split("\n")
-        resumo_texto = "\n".join(resumo[:6])  # só as primeiras linhas do chunk
-
+        resumo_texto = "\n".join(resumo[:6])
         contexto += (
             f"Título: {artigo['titulo']}\n"
             f"Autor: {artigo['autor']}\n"
@@ -158,18 +183,8 @@ def consultar_rag(pergunta, top_k=5):
             f"{resumo_texto}\n---\n"
         )
 
-    prompt = f"""
-    Você é um assistente que responde perguntas com base nas matérias abaixo.
-    Use **apenas** essas informações — não invente fatos nem links.
-    Quando relevante, apresente os resultados em formato de lista (com Título e Link). Não repita materias com o mesmo Link
-
-    Pergunta: {pergunta}
-
-    Matérias:
-    {contexto}
-
-    Responda de forma objetiva e natural:
-    """
+    template_prompt = getPrompt()
+    prompt = template_prompt.format(pergunta=pergunta, contexto=contexto)
 
     resposta = client.chat.completions.create(
         model="gpt-4o-mini",
@@ -179,7 +194,6 @@ def consultar_rag(pergunta, top_k=5):
 
     texto_resposta = resposta.choices[0].message.content.strip()
     return texto_resposta
-
 
 
 # =====================================
