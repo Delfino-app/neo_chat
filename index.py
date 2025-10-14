@@ -10,9 +10,7 @@ from getRequests import atualizar_db_com_wp
 from storage import load_posts
 import streamlit as st
 
-load_dotenv()
-
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_API_KEY = st.secrets["openai"]["api_key"]
 if not OPENAI_API_KEY:
     raise ValueError("⚠️ A variável OPENAI_API_KEY não foi encontrada no .env!")
 

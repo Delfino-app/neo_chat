@@ -1,0 +1,12 @@
+# --- Bibliotecas principais ---
+streamlit
+openai>=1.12.0
+chromadb
+tiktoken
+pandas
+
+# --- Banco de dados e manipulação de dados ---
+python-dotenv
+
+# --- Utilidades ---
+requests
