@@ -50,14 +50,13 @@ def dividir_em_chunks(texto, max_tokens=800):
 # =====================================
 # 📰 ATUALIZAÇÃO AUTOMÁTICA DO BANCO
 # =====================================
-def updatePostsDB(page=1):
+def updatePostsDB():
     print("Atualizando banco de matérias a partir do WordPress...")
     try:
-        atualizar_db_com_wp(page)
+        atualizar_db_com_wp()
     except Exception as e:
         print(f"Erro ao atualizar matérias: {e}")
-
-
+        
 # =====================================
 # 💾 POPULAR CHROMA (INDEXAÇÃO RAG)
 # =====================================
