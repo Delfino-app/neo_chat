@@ -8,6 +8,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from getRequests import atualizar_db_com_wp
 from storage import load_posts
+import streamlit as st
 
 load_dotenv()
 
@@ -186,25 +187,14 @@ def consultar_rag(pergunta, top_k=5):
     template_prompt = getPrompt()
     prompt = template_prompt.format(pergunta=pergunta, contexto=contexto)
 
-    resposta = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.2,
-    )
-
-    texto_resposta = resposta.choices[0].message.content.strip()
-    return texto_resposta
-
-
-# =====================================
-# 💬 MODO INTERATIVO
-# =====================================
-if __name__ == "__main__":
-    print("\n💬 Modo Chat RAG iniciado! (digite 'sair' para encerrar)\n")
-    while True:
-        pergunta = input("❓ Pergunta: ").strip()
-        if pergunta.lower() in ["sair", "exit", "quit"]:
-            print("👋 Encerrando...")
-            break
-        if pergunta:
-            consultar_rag(pergunta)
+    with st.chat_message("assistant"):
+        stream = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.2,
+            stream=True,
+        )
+        response = st.write_stream(stream)
+    st.session_state.messages.append({"role": "assistant", "content": response})
