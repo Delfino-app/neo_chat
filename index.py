@@ -124,12 +124,10 @@ def getPrompt(caminho="prompt.txt"):
     with open(caminho, "r", encoding="utf-8") as f:
         return f.read()
 
-import streamlit as st
-from openai import OpenAI
-client = OpenAI()
-
 def consultar_rag(mensagens, top_k=5):
-   
+    import streamlit as st
+
+    # ====== 1️⃣ Identifica a última pergunta ======
     ultima_pergunta = ""
     for m in reversed(mensagens):
         if m["role"] == "user":
@@ -140,7 +138,11 @@ def consultar_rag(mensagens, top_k=5):
         print("⚠️ Nenhuma pergunta do usuário encontrada.")
         return
 
-    # ====== 1️⃣ Busca semântica (RAG) ======
+    # ====== 2️⃣ Verifica se a pergunta faz referência à última matéria ======
+    referencias = ["essa matéria", "esse artigo", "essa reportagem", "essa análise", "esse texto", "ela", "ele", "isso"]
+    referencia_detectada = any(ref in ultima_pergunta.lower() for ref in referencias)
+
+    # ====== 3️⃣ Busca semântica (RAG normal) ======
     q_emb = client.embeddings.create(
         model="text-embedding-3-small",
         input=ultima_pergunta
@@ -186,7 +188,7 @@ def consultar_rag(mensagens, top_k=5):
         print("🧠 Nenhum artigo relevante encontrado.")
         return
 
-    # ====== 2️⃣ Monta o contexto dos artigos ======
+    # ====== 4️⃣ Monta o contexto base ======
     contexto = ""
     for artigo in artigos_unicos.values():
         resumo = artigo['texto'].split("\n")
@@ -199,24 +201,36 @@ def consultar_rag(mensagens, top_k=5):
             f"{resumo_texto}\n---\n"
         )
 
-    # ====== 3️⃣ Usa o template do prompt ======
+    # ====== 5️⃣ Se o usuário se referiu à matéria anterior, adiciona os metadados salvos ======
+    if referencia_detectada and "metadados_ultima_materia" in st.session_state:
+        meta = st.session_state.metadados_ultima_materia
+        contexto = (
+            f"(O usuário está se referindo à última matéria sugerida anteriormente.)\n"
+            f"Título: {meta['titulo']}\n"
+            f"Autor: {meta['autor']}\n"
+            f"Data: {meta['data']}\n"
+            f"Link: {meta['link']}\n\n"
+            f"{contexto}"
+        )
+
+    # ====== 6️⃣ Usa o template do prompt ======
     template_prompt = getPrompt()
     prompt = template_prompt.format(pergunta=ultima_pergunta, contexto=contexto)
 
-    # ====== 4️⃣ Monta o histórico (memória curta) ======
+    # ====== 7️⃣ Monta o histórico (últimas 5 mensagens) ======
     historico = [
         {"role": m["role"], "content": m["content"]}
-        for m in mensagens[-5:]  # últimas 5 interações
+        for m in mensagens[-5:]
     ]
 
-    # ====== 5️⃣ Monta o payload final ======
+    # ====== 8️⃣ Monta payload final ======
     mensagens_completas = [
         {"role": "system", "content": "Você é NEO, o assistente do portal NeoFeed. Responda de forma clara e com base nos artigos do contexto."},
         *historico,
-        {"role": "user", "content": prompt}  # aqui entra seu prompt formatado
+        {"role": "user", "content": prompt}
     ]
 
-    # ====== 6️⃣ Envia pro modelo ======
+    # ====== 9️⃣ Envia pro modelo ======
     stream = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=mensagens_completas,
@@ -224,5 +238,14 @@ def consultar_rag(mensagens, top_k=5):
         stream=True,
     )
 
-    return stream
+    # ====== 🔟 Salva metadados da última matéria ======
+    # (pega a primeira, que normalmente é a mais relevante)
+    primeiro_artigo = list(artigos_unicos.values())[0]
+    st.session_state.metadados_ultima_materia = {
+        "titulo": primeiro_artigo["titulo"],
+        "autor": primeiro_artigo["autor"],
+        "data": primeiro_artigo["data"],
+        "link": primeiro_artigo["link"]
+    }
 
+    return stream

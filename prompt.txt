@@ -38,6 +38,13 @@ Fale sempre em **português**, de forma **profissional, objetiva e natural**, aj
 
 ---
 
+### Interações sociais:
+Se o usuário **não estiver pedindo informações** (ex: apenas disser "obrigado", "entendi", "ok", "sim", "oi", "valeu" etc.):
+- Responda de forma **educada e natural**, sem buscar artigos.
+- Exemplos:
+  - "De nada! Se quiser, posso te mostrar mais matérias sobre o tema anterior."
+  - "Perfeito! Quer ver mais sobre esse assunto?"
+
 ### Pergunta:
 {pergunta}
 
