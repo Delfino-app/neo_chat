@@ -124,11 +124,26 @@ def getPrompt(caminho="prompt.txt"):
     with open(caminho, "r", encoding="utf-8") as f:
         return f.read()
 
-def consultar_rag(pergunta, top_k=5):
-    """Executa busca semântica e responde com base nas matérias indexadas."""
+import streamlit as st
+from openai import OpenAI
+client = OpenAI()
+
+def consultar_rag(mensagens, top_k=5):
+   
+    ultima_pergunta = ""
+    for m in reversed(mensagens):
+        if m["role"] == "user":
+            ultima_pergunta = m["content"]
+            break
+
+    if not ultima_pergunta:
+        print("⚠️ Nenhuma pergunta do usuário encontrada.")
+        return
+
+    # ====== 1️⃣ Busca semântica (RAG) ======
     q_emb = client.embeddings.create(
         model="text-embedding-3-small",
-        input=pergunta
+        input=ultima_pergunta
     ).data[0].embedding
 
     resultados = collection.query(
@@ -140,7 +155,7 @@ def consultar_rag(pergunta, top_k=5):
     metas = resultados["metadatas"][0]
 
     if not metas:
-        print("🧠 Resposta: Nenhum resultado encontrado.")
+        print("🧠 Nenhum resultado encontrado.")
         return
 
     artigos_unicos = {}
@@ -152,7 +167,6 @@ def consultar_rag(pergunta, top_k=5):
 
         if not doc_id or not link:
             continue
-
         if doc_id in artigos_unicos or link in links_vistos:
             continue
 
@@ -169,9 +183,10 @@ def consultar_rag(pergunta, top_k=5):
             break
 
     if not artigos_unicos:
-        print("🧠 Resposta: Nenhum artigo relevante encontrado.")
+        print("🧠 Nenhum artigo relevante encontrado.")
         return
 
+    # ====== 2️⃣ Monta o contexto dos artigos ======
     contexto = ""
     for artigo in artigos_unicos.values():
         resumo = artigo['texto'].split("\n")
@@ -184,17 +199,30 @@ def consultar_rag(pergunta, top_k=5):
             f"{resumo_texto}\n---\n"
         )
 
+    # ====== 3️⃣ Usa o template do prompt ======
     template_prompt = getPrompt()
-    prompt = template_prompt.format(pergunta=pergunta, contexto=contexto)
+    prompt = template_prompt.format(pergunta=ultima_pergunta, contexto=contexto)
 
-    with st.chat_message("assistant"):
-        stream = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.2,
-            stream=True,
-        )
-        response = st.write_stream(stream)
-    st.session_state.messages.append({"role": "assistant", "content": response})
+    # ====== 4️⃣ Monta o histórico (memória curta) ======
+    historico = [
+        {"role": m["role"], "content": m["content"]}
+        for m in mensagens[-5:]  # últimas 5 interações
+    ]
+
+    # ====== 5️⃣ Monta o payload final ======
+    mensagens_completas = [
+        {"role": "system", "content": "Você é NEO, o assistente do portal NeoFeed. Responda de forma clara e com base nos artigos do contexto."},
+        *historico,
+        {"role": "user", "content": prompt}  # aqui entra seu prompt formatado
+    ]
+
+    # ====== 6️⃣ Envia pro modelo ======
+    stream = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=mensagens_completas,
+        temperature=0.2,
+        stream=True,
+    )
+
+    return stream
+
