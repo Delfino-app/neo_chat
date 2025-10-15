@@ -4,10 +4,6 @@ from index import consultar_rag
 
 st.set_page_config(page_title="Chat RAG - NeoFeed", page_icon="🧠", layout="centered")
 
-st.title("🧠 NEO")
-st.caption("")
-
-
 if "messages" not in st.session_state:
     st.session_state.messages = st.session_state.messages = [
         {
