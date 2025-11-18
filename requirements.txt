@@ -14,4 +14,5 @@ requests
 langchain-core
 langchain-openai
 langchain-community
+langchain
 python-dotenv
