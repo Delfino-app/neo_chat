@@ -8,8 +8,7 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.chat_history import BaseChatMessageHistory
 from operator import itemgetter
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 OPENAI_API_KEY = st.secrets["openai"]["api_key"]
 if not OPENAI_API_KEY:
