@@ -15,7 +15,6 @@ OPENAI_API_KEY = st.secrets["openai"]["api_key"]
 if not OPENAI_API_KEY:
     raise ValueError("A variável OPENAI_API_KEY não foi encontrada no .env!")
 
-@st.cache_resource
 def load_documents_from_sql():
 
     import sqlite3
@@ -49,7 +48,7 @@ def load_documents_from_sql():
     conn.close()
     return documents
 
-@st.cache_resource
+
 def reloadVetorDB():
 
     documents = load_documents_from_sql()
@@ -83,7 +82,7 @@ def reloadVetorDB():
     return vectorstore
 
 
-@st.cache_resource
+@st.cache_resource(show_spinner="Iniciando o Chat...")
 def initRag():
 
     embeddings = OpenAIEmbeddings(api_key=OPENAI_API_KEY)
@@ -209,7 +208,8 @@ def chatMessage(pergunta):
         
         for chunk in response:
             if hasattr(chunk, 'content'):
-                yield chunk.content
+                content = chunk.content.replace('$', '\\$')
+                yield content
                 
     except Exception as e:
         st.error(f"Erro no sistema: {str(e)}")
