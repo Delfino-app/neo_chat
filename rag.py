@@ -8,9 +8,6 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.chat_history import BaseChatMessageHistory
 from operator import itemgetter
-from langchain_community.document_loaders import SQLDatabaseLoader
-from langchain_community.utilities import SQLDatabase
-from storage import load_posts
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 
@@ -18,6 +15,7 @@ OPENAI_API_KEY = st.secrets["openai"]["api_key"]
 if not OPENAI_API_KEY:
     raise ValueError("A variável OPENAI_API_KEY não foi encontrada no .env!")
 
+@st.cache_resource
 def load_documents_from_sql():
 
     import sqlite3
@@ -30,7 +28,10 @@ def load_documents_from_sql():
     documents = []
     for row in rows:
         titulo, autor, data, link, conteudo, doc_id = row
-        
+
+        titulo = titulo.replace('$', '\\$')
+        conteudo = conteudo.replace('$', '\\$')
+
         from langchain_core.documents import Document
         doc = Document(
             page_content=conteudo or "",
@@ -48,13 +49,11 @@ def load_documents_from_sql():
     conn.close()
     return documents
 
-
-
 @st.cache_resource
-def inicializar_sistema():
+def reloadVetorDB():
 
     documents = load_documents_from_sql()
-
+    
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=800,
         chunk_overlap=100,
@@ -73,15 +72,40 @@ def inicializar_sistema():
 
     embeddings = OpenAIEmbeddings(api_key=OPENAI_API_KEY)
 
+    # Recria o Chroma
     vectorstore = Chroma.from_documents(
         documents=chunks,
         collection_name="artigos_demo",
         embedding=embeddings,
         persist_directory="./chroma_db"
     )
+    
+    return vectorstore
+
+
+@st.cache_resource
+def initRag():
+
+    embeddings = OpenAIEmbeddings(api_key=OPENAI_API_KEY)
+
+    try:
+
+        vectorstore = Chroma(
+            persist_directory="./chroma_db",
+            embedding_function=embeddings,
+            collection_name="artigos_demo"
+        )
+        
+        doc_count = vectorstore._collection.count()
+        
+        if doc_count == 0:
+            vectorstore = reloadVetorDB()
+        
+    except Exception as e:
+        vectorstore = reloadVetorDB()
 
     retriever = vectorstore.as_retriever(
-        search_type="similarity",  # Mais confiável com threshold
+        search_type="similarity", 
         search_kwargs={"k": 8}
     )
 
@@ -132,7 +156,7 @@ def inicializar_sistema():
             formatted.append("\n".join(doc_info))
         
         return "\n\n---\n\n".join(formatted)
-
+    
     retrieval_chain = {
         "input": itemgetter("input"),
         "history": itemgetter("history")
@@ -163,7 +187,7 @@ def inicializar_sistema():
 
 def chatMessage(pergunta):
     
-    chain = inicializar_sistema()
+    chain = initRag()
 
     if 'chat_session_id' not in st.session_state:
         import time
@@ -183,13 +207,9 @@ def chatMessage(pergunta):
             config={"configurable": {"session_id": session_id}}
         )
         
-        full_response = ""
         for chunk in response:
             if hasattr(chunk, 'content'):
-                content = chunk.content
-                content = content.replace('$', '\\$')  # Escape do $
-                full_response += content
-                yield content
+                yield chunk.content
                 
     except Exception as e:
         st.error(f"Erro no sistema: {str(e)}")
@@ -197,5 +217,5 @@ def chatMessage(pergunta):
 
 if __name__ == "__main__":
     # Teste simples do streaming
-    inicializar_sistema()
+    initRag()
     print()
