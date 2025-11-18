@@ -19,8 +19,14 @@ def save(posts, arquivo_db="artigos.db"):
 
     for post in posts:
         cursor.execute("""
-            INSERT OR IGNORE INTO artigos (doc_id, titulo, conteudo, autor, data, link)
+            INSERT INTO artigos (doc_id, titulo, conteudo, autor, data, link)
             VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(doc_id) DO UPDATE SET
+                titulo=excluded.titulo,
+                conteudo=excluded.conteudo,
+                autor=excluded.autor,
+                data=excluded.data,
+                link=excluded.link
         """, (
             post["doc_id"],
             post["titulo"],
@@ -32,7 +38,7 @@ def save(posts, arquivo_db="artigos.db"):
 
     conn.commit()
     conn.close()
-    print(f"✅ Banco atualizado com {len(posts)} matérias.")
+    print(f"✅ Banco atualizado com {len(posts)} matérias (novos ou atualizados).")
 
 
 def load_posts(arquivo_db="artigos.db"):
@@ -45,21 +51,22 @@ def load_posts(arquivo_db="artigos.db"):
 def load_posts_simplify(arquivo_db="artigos.db", limite=10):
 
     if not os.path.exists(arquivo_db):
-        print(f"⚠️ Banco {arquivo_db} não encontrado.")
+        print(f"Banco {arquivo_db} não encontrado.")
         return
 
     conn = sqlite3.connect(arquivo_db)
-    query = f"SELECT doc_id, titulo, data, link, autor FROM artigos ORDER BY data DESC LIMIT {limite}"
+    query = f"SELECT doc_id, titulo, data, link, conteudo, autor FROM artigos ORDER BY data DESC LIMIT {limite}"
     df = pd.read_sql(query, conn)
     conn.close()
 
     if df.empty:
-        print("📭 Nenhum registro encontrado na tabela 'artigos'.")
+        print("Nenhum registro encontrado na tabela 'artigos'.")
         return
 
     print(f"📋 Listando {len(df)} matérias mais recentes:\n")
     for _, row in df.iterrows():
         print(f"📰 {row['titulo']}")
+        print(f"📰 {row['conteudo']}")
         print(f"📰 {row['autor']}")
         print(f"📅 {row['data']} | 🔗 {row['link']}")
         print(f"🆔 {row['doc_id']}\n---")
@@ -70,7 +77,7 @@ def load_posts_simplify(arquivo_db="artigos.db", limite=10):
 def clean_db(arquivo_db="artigos.db"):
    
     if not os.path.exists(arquivo_db):
-        print(f"⚠️ Banco {arquivo_db} não encontrado.")
+        print(f"Banco {arquivo_db} não encontrado.")
         return
 
     conn = sqlite3.connect(arquivo_db)
@@ -92,4 +99,9 @@ def clean_db(arquivo_db="artigos.db"):
     conn.commit()
     conn.close()
 
-    print(f"🧹 Todos os dados foram removidos da tabela 'artigos' em {arquivo_db}.")
+    print(f"Todos os dados foram removidos da tabela 'artigos' em {arquivo_db}.")
+
+if __name__ == "__main__":
+    # Teste simples do streaming
+    load_posts_simplify()
+    print()

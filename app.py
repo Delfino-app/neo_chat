@@ -1,6 +1,8 @@
 import streamlit as st
-from index import consultar_rag
+from rag import chatMessage
+from rag import initRag
 
+initRag()
 
 st.set_page_config(page_title="Chat RAG - NeoFeed", page_icon="🧠", layout="centered")
 
@@ -22,10 +24,8 @@ if pergunta:
     st.session_state.messages.append({"role": "user", "content": pergunta})
     st.chat_message("user").markdown(pergunta)
 
-    mensagens_contexto = st.session_state.messages[-5:]
-
     with st.chat_message("assistant"):
-        resposta_stream = consultar_rag(mensagens_contexto)
+        resposta_stream = chatMessage(pergunta)
         resposta_final = st.write_stream(resposta_stream)
 
     st.session_state.messages.append({"role": "assistant", "content": resposta_final})

@@ -10,3 +10,8 @@ python-dotenv
 
 # --- Utilidades ---
 requests
+
+langchain-core
+langchain-openai
+langchain-community
+python-dotenv
