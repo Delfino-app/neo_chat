@@ -83,7 +83,7 @@ def reloadVetorDB():
     return vectorstore
 
 
-@st.cache_resource(show_spinner="Iniciando o Chat...")
+#@st.cache_resource(show_spinner="Iniciando o Chat...")
 def initRag():
 
     embeddings = OpenAIEmbeddings(api_key=OPENAI_API_KEY)
