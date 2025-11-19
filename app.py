@@ -2,8 +2,6 @@ import streamlit as st
 from rag import chatMessage
 from rag import initRag
 
-initRag()
-
 st.set_page_config(page_title="Chat RAG - NeoFeed", page_icon="🧠", layout="centered")
 
 if "messages" not in st.session_state:
