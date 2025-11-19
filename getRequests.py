@@ -4,6 +4,7 @@ import requests
 from bs4 import BeautifulSoup
 import html
 import re
+from urllib.parse import urlparse
 
 def limpar_caracteres_agressivo(texto):
     """Limpeza mais robusta para conteúdo da web"""
@@ -44,7 +45,7 @@ def limpar_caracteres_agressivo(texto):
     return texto.strip()
 
 
-def atualizar_db_com_wp(url="https://neofeed.com.br/wp-json/wp/v2/posts", page="1"):
+def atualizar_db_com_wp(url="https://neofeed.com.br/wp-json/wp/v2/posts", page="15"):
     print(f"📡 Buscando posts em: {url}")
 
     headers = {
@@ -103,15 +104,22 @@ def atualizar_db_com_wp(url="https://neofeed.com.br/wp-json/wp/v2/posts", page="
         titulo_html = p.get("title", {}).get("rendered", "")
         titulo_limpo = limpar_caracteres_agressivo(titulo_html)
 
+        link = p.get("link", "").strip()
+
+        parsed = urlparse(link)
+        path_parts = parsed.path.strip("/").split("/")
+        post_category = path_parts[0]
+
+        categoria = post_category
+
         autor = p.get("yoast_head_json", {}).get("author", "")
         autor_limpo = limpar_caracteres_agressivo(autor)
-        
-        link = p.get("link", "").strip()
 
         novos.append({
             "doc_id": f"artigo-{post_id}",
             "titulo": titulo_limpo,
             "conteudo": conteudo_limpo,
+            "categoria": categoria,
             "autor": autor_limpo,
             "data": data_publicacao,
             "link": link,
