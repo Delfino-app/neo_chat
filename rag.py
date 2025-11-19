@@ -20,12 +20,12 @@ def load_documents_from_sql():
     conn = sqlite3.connect('artigos.db')
     cursor = conn.cursor()
     
-    cursor.execute("SELECT titulo, autor, data, link, conteudo, doc_id FROM artigos")
+    cursor.execute("SELECT titulo, categoria, autor, data, link, conteudo, doc_id FROM artigos")
     rows = cursor.fetchall()
     
     documents = []
     for row in rows:
-        titulo, autor, data, link, conteudo, doc_id = row
+        titulo, autor, categoria, data, link, conteudo, doc_id = row
 
         titulo = titulo.replace('$', '\\$')
         conteudo = conteudo.replace('$', '\\$')
@@ -36,6 +36,7 @@ def load_documents_from_sql():
             metadata={
                 "titulo": titulo or "",
                 "autor": autor or "", 
+                "categoria": categoria or "",
                 "data": data or "",
                 "link": link or "",
                 "doc_id": doc_id or "",
@@ -64,6 +65,7 @@ def reloadVetorDB():
         chunk.metadata.update({
             "doc_type": "artigo",
             "titulo": chunk.metadata.get("titulo", ""),
+            "categoria": chunk.metadata.get("categoria", ""),
             "data": chunk.metadata.get("data", ""),
             "autor": chunk.metadata.get("autor", "")
         })
@@ -144,6 +146,8 @@ def initRag():
             doc_info.append(f"Conteúdo: {doc.page_content}")
             
             # Metadados
+            if doc.metadata.get('categoria'):
+                doc_info.append(f"Categoria: {doc.metadata['categoria']}")
             if doc.metadata.get('link'):
                 doc_info.append(f"Link: {doc.metadata['link']}")
             if doc.metadata.get('data'):

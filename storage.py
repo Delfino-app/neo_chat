@@ -6,11 +6,18 @@ def save(posts, arquivo_db="artigos.db"):
     conn = sqlite3.connect(arquivo_db)
     cursor = conn.cursor()
 
+    try:
+        cursor.execute("ALTER TABLE artigos ADD COLUMN categoria TEXT")
+    except sqlite3.OperationalError:
+        # coluna já existe
+        pass
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS artigos (
             doc_id TEXT PRIMARY KEY,
             titulo TEXT,
             conteudo TEXT,
+            categoria TEXT,
             autor TEXT,
             data TEXT,
             link TEXT
@@ -19,11 +26,12 @@ def save(posts, arquivo_db="artigos.db"):
 
     for post in posts:
         cursor.execute("""
-            INSERT INTO artigos (doc_id, titulo, conteudo, autor, data, link)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO artigos (doc_id, titulo, conteudo, categoria, autor, data, link)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(doc_id) DO UPDATE SET
                 titulo=excluded.titulo,
                 conteudo=excluded.conteudo,
+                categoria=excluded.categoria,
                 autor=excluded.autor,
                 data=excluded.data,
                 link=excluded.link
@@ -31,6 +39,7 @@ def save(posts, arquivo_db="artigos.db"):
             post["doc_id"],
             post["titulo"],
             post["conteudo"],
+            post["categoria"],
             post["autor"],
             post["data"],
             post["link"],
@@ -55,7 +64,7 @@ def load_posts_simplify(arquivo_db="artigos.db", limite=10):
         return
 
     conn = sqlite3.connect(arquivo_db)
-    query = f"SELECT doc_id, titulo, data, link, conteudo, autor FROM artigos ORDER BY data DESC LIMIT {limite}"
+    query = f"SELECT doc_id, titulo, categoria, data, link, conteudo, autor FROM artigos ORDER BY data DESC LIMIT {limite}"
     df = pd.read_sql(query, conn)
     conn.close()
 
@@ -67,6 +76,7 @@ def load_posts_simplify(arquivo_db="artigos.db", limite=10):
     for _, row in df.iterrows():
         print(f"📰 {row['titulo']}")
         print(f"📰 {row['conteudo']}")
+        print(f"📰 {row['categoria']}")
         print(f"📰 {row['autor']}")
         print(f"📅 {row['data']} | 🔗 {row['link']}")
         print(f"🆔 {row['doc_id']}\n---")
@@ -89,6 +99,7 @@ def clean_db(arquivo_db="artigos.db"):
             doc_id TEXT PRIMARY KEY,
             titulo TEXT,
             conteudo TEXT,
+            categoria TEXT,
             autor TEXT,
             data TEXT,
             link TEXT
@@ -103,5 +114,5 @@ def clean_db(arquivo_db="artigos.db"):
 
 if __name__ == "__main__":
     # Teste simples do streaming
-    load_posts_simplify()
+    clean_db()
     print()
