@@ -45,7 +45,7 @@ def limpar_caracteres_agressivo(texto):
     return texto.strip()
 
 
-def atualizar_db_com_wp(url="https://neofeed.com.br/wp-json/wp/v2/posts", page="15"):
+def atualizar_db_com_wp(url="https://neofeed.com.br/wp-json/wp/v2/posts", page="2"):
     print(f"📡 Buscando posts em: {url}")
 
     headers = {
