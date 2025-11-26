@@ -9,6 +9,7 @@ from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.chat_history import BaseChatMessageHistory
 from operator import itemgetter
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+import time
 
 OPENAI_API_KEY = st.secrets["openai"]["api_key"]
 if not OPENAI_API_KEY:
@@ -185,23 +186,29 @@ def initRag():
         history_messages_key="history"
     )
 
-    return chain_with_history
+    return chain_with_history, get_session_history
 
 def chatMessage(pergunta):
     
-    chain = initRag()
+    chain = st.session_state.chain
+    get_session_history = st.session_state.get_session_history
 
     if 'chat_session_id' not in st.session_state:
-        import time
         st.session_state.chat_session_id = f"session_{int(time.time())}"
     
     session_id = st.session_state.chat_session_id
+
+    history = get_session_history(session_id)
     
     try:
+
         if not pergunta.strip():
             yield "Por favor, faça uma pergunta sobre as matérias disponíveis no Neofeed."
             return
         
+        history.add_user_message(pergunta)
+        resposta_final = ""
+
         response = chain.stream(
             {
                 "input": pergunta
@@ -211,8 +218,15 @@ def chatMessage(pergunta):
         
         for chunk in response:
             if hasattr(chunk, 'content'):
-                content = chunk.content.replace('$', '\\$')
-                yield content
+                texto = chunk.content.replace("$", "\\$")
+                resposta_final += texto
+                time.sleep(0.07)
+                yield texto
+
+               
+
+        if resposta_final.strip():
+            history.add_ai_message(resposta_final)
                 
     except Exception as e:
         st.error(f"Erro no sistema: {str(e)}")
