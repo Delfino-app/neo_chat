@@ -6,7 +6,7 @@ def load_documents_from_sql():
     conn = sqlite3.connect('artigos.db')
     cursor = conn.cursor()
     
-    cursor.execute("SELECT titulo, autor, categoria, data, link, conteudo, doc_id FROM artigos")
+    cursor.execute("SELECT titulo, autor, categoria, data, link, conteudo, doc_id FROM artigos ORDER BY data DESC LIMIT 100")
     rows = cursor.fetchall()
     
     documents = []
