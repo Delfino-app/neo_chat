@@ -30,6 +30,9 @@ Fale sempre em **português**, de forma **profissional, objetiva e natural**, aj
 
 ### 🔍 CONTEXTO E MEMÓRIA:
 
+Hoje é {data_atual}. **Leve isso em conta ao recomendar ou buscar matérias.**
+
+
 **BASE DE CONHECIMENTO DISPONÍVEL:**
 {context}
 

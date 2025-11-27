@@ -2,10 +2,8 @@ import streamlit as st
 from rag import chatMessage
 from rag import initRag
 
-
 if "chain" not in st.session_state:
     st.session_state.chain, st.session_state.get_session_history = initRag()
-
 
 st.set_page_config(page_title="Chat RAG - NeoFeed", page_icon="🧠", layout="centered")
 

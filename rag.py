@@ -10,6 +10,7 @@ from langchain_core.chat_history import BaseChatMessageHistory
 from operator import itemgetter
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import time
+from datetime import datetime
 
 OPENAI_API_KEY = st.secrets["openai"]["api_key"]
 if not OPENAI_API_KEY:
@@ -159,10 +160,16 @@ def initRag():
             formatted.append("\n".join(doc_info))
         
         return "\n\n---\n\n".join(formatted)
+
+    if "data_hoje" not in st.session_state:
+        st.session_state.data_hoje = datetime.now().strftime("%Y-%m-%d")
+    
+    data_hoje = st.session_state.data_hoje
     
     retrieval_chain = {
         "input": itemgetter("input"),
-        "history": itemgetter("history")
+        "history": itemgetter("history"),
+        "data_atual": lambda x: data_hoje
     } | RunnablePassthrough.assign(
         context=itemgetter("input") | retriever | format_docs
     )
@@ -220,7 +227,7 @@ def chatMessage(pergunta):
             if hasattr(chunk, 'content'):
                 texto = chunk.content.replace("$", "\\$")
                 resposta_final += texto
-                time.sleep(0.07)
+                time.sleep(0.08)
                 yield texto
 
                
@@ -229,8 +236,8 @@ def chatMessage(pergunta):
             history.add_ai_message(resposta_final)
                 
     except Exception as e:
-        st.error(f"Erro no sistema: {str(e)}")
         yield "Desculpe, ocorreu um erro ao processar sua pergunta. Tente novamente."
+        st.error(f"Erro no sistema: {str(e)}")
 
 if __name__ == "__main__":
     # Teste simples do streaming
