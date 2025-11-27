@@ -9,7 +9,14 @@ from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.chat_history import BaseChatMessageHistory
 from operator import itemgetter
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+
 import time
+from datetime import datetime
+
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 OPENAI_API_KEY = st.secrets["openai"]["api_key"]
 if not OPENAI_API_KEY:
@@ -32,18 +39,31 @@ def load_documents_from_sql():
         conteudo = conteudo.replace('$', '\\$')
 
         from langchain_core.documents import Document
+        
         doc = Document(
-            page_content=conteudo or "",
+            page_content=f"""
+                Título: {titulo}
+                Categoria: {categoria}
+                Autor: {autor}
+                Data: {data}
+                Link: {link}
+
+                Conteúdo:
+                {conteudo}
+            """,
             metadata={
-                "titulo": titulo or "",
-                "autor": autor or "", 
-                "categoria": categoria or "",
-                "data": data or "",
-                "link": link or "",
-                "doc_id": doc_id or "",
-                "doc_type": "artigo"
+                "titulo": titulo,
+                "autor": autor,
+                "categoria": categoria,
+                "data": data,
+                "link": link,
+                "doc_id": doc_id,
+                "doc_type": "artigo",
+                "conteudo": conteudo
             }
         )
+
+
         documents.append(doc)
     
     conn.close()
@@ -105,11 +125,6 @@ def initRag():
     except Exception as e:
         vectorstore = reloadVetorDB()
 
-    retriever = vectorstore.as_retriever(
-        search_type="similarity", 
-        search_kwargs={"k": 8}
-    )
-
     def getPrompt(caminho="prompt.txt"):
         with open(caminho, "r", encoding="utf-8") as f:
             return f.read()
@@ -130,8 +145,7 @@ def initRag():
     )
 
     def format_docs(docs):
-        formatted = []
-        
+        formatted = []        
         for doc in docs:
             link = doc.metadata.get('link', '')
             if any(proibido in link for proibido in ['/brand-stories/', '/apresentado-por-']):
@@ -144,7 +158,7 @@ def initRag():
                 doc_info.append(f"Título: {doc.metadata['titulo']}")
             
             # Conteúdo
-            doc_info.append(f"Conteúdo: {doc.page_content}")
+            doc_info.append(f"Conteúdo: {doc.metadata['conteudo']}")
             
             # Metadados
             if doc.metadata.get('categoria'):
@@ -159,12 +173,21 @@ def initRag():
             formatted.append("\n".join(doc_info))
         
         return "\n\n---\n\n".join(formatted)
+
+    if "data_hoje" not in st.session_state:
+        st.session_state.data_hoje = datetime.now().strftime("%Y-%m-%d")
     
+    data_hoje = st.session_state.data_hoje
+
+    from core.helpers.chatHelper import customRetrievel
+    retriever_com_filtro = customRetrievel(vectorstore, k=3)
+
     retrieval_chain = {
         "input": itemgetter("input"),
-        "history": itemgetter("history")
+        "history": itemgetter("history"),
+        "data_atual": lambda x: data_hoje
     } | RunnablePassthrough.assign(
-        context=itemgetter("input") | retriever | format_docs
+        context=itemgetter("input") | retriever_com_filtro | format_docs
     )
 
     rag_chain = retrieval_chain | prompt | llm
@@ -187,7 +210,6 @@ def initRag():
     )
 
     return chain_with_history, get_session_history
-
 def chatMessage(pergunta):
     
     chain = st.session_state.chain
@@ -209,9 +231,16 @@ def chatMessage(pergunta):
         history.add_user_message(pergunta)
         resposta_final = ""
 
+        #retriever = st.session_state.retriever
+        #from core.helpers.chatHelper import buscar_docs
+        
+        # Buscar documentos formatados
+        #contexto = buscar_docs(pergunta, retriever)  # Isso já retorna texto formatado
+        #print(contexto)
+        # Stream com a pergunta original E o contexto
         response = chain.stream(
             {
-                "input": pergunta
+               "input": pergunta,
             },
             config={"configurable": {"session_id": session_id}}
         )
@@ -220,7 +249,53 @@ def chatMessage(pergunta):
             if hasattr(chunk, 'content'):
                 texto = chunk.content.replace("$", "\\$")
                 resposta_final += texto
-                time.sleep(0.07)
+                time.sleep(0.08)
+                yield texto
+
+        if resposta_final.strip():
+            history.add_ai_message(resposta_final)
+                
+    except Exception as e:
+        yield "Desculpe, ocorreu um erro ao processar sua pergunta. Tente novamente."
+        st.error(f"Erro no sistema: {str(e)}")
+        
+def chatMessages(pergunta):
+    
+    chain = st.session_state.chain
+    get_session_history = st.session_state.get_session_history
+
+    if 'chat_session_id' not in st.session_state:
+        st.session_state.chat_session_id = f"session_{int(time.time())}"
+    
+    session_id = st.session_state.chat_session_id
+
+    history = get_session_history(session_id)
+    
+    try:
+
+        if not pergunta.strip():
+            yield "Por favor, faça uma pergunta sobre as matérias disponíveis no Neofeed."
+            return
+        
+        history.add_user_message(pergunta)
+        resposta_final = ""
+
+        retriever = st.session_state.retriever
+        from core.helpers.chatHelper import buscar_docs
+        input_texto = buscar_docs(pergunta,retriever)
+
+        response = chain.stream(
+            {
+               "input": input_texto or pergunta
+            },
+            config={"configurable": {"session_id": session_id}}
+        )
+        
+        for chunk in response:
+            if hasattr(chunk, 'content'):
+                texto = chunk.content.replace("$", "\\$")
+                resposta_final += texto
+                time.sleep(0.08)
                 yield texto
 
                
@@ -229,8 +304,8 @@ def chatMessage(pergunta):
             history.add_ai_message(resposta_final)
                 
     except Exception as e:
-        st.error(f"Erro no sistema: {str(e)}")
         yield "Desculpe, ocorreu um erro ao processar sua pergunta. Tente novamente."
+        st.error(f"Erro no sistema: {str(e)}")
 
 if __name__ == "__main__":
     # Teste simples do streaming
