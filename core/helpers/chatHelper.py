@@ -2,7 +2,10 @@ import sys
 import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-from langchain.schema.runnable import RunnableLambda
+try:
+    from langchain_core.runnables import RunnableLambda
+except ImportError:
+    from langchain.schema.runnable import RunnableLambda
 
 def customRetrievel(vectorstore, k=3):
 
