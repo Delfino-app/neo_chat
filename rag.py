@@ -125,7 +125,7 @@ def initRag():
     except Exception as e:
         vectorstore = reloadVetorDB()
 
-    def getPrompt(caminho="prompt.txt"):
+    def getPrompt(caminho="promptContextual.txt"):
         with open(caminho, "r", encoding="utf-8") as f:
             return f.read()
         

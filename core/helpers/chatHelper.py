@@ -13,19 +13,24 @@ def customRetrievel(vectorstore, k=3):
         filtro_data = detectar_filtro_data(pergunta)
         print(f"DEBUG - Filtro aplicado: {filtro_data}")
         
-        # Detecta se quer apenas uma matéria
         quer_apenas_um = any(palavra in pergunta.lower() for palavra in 
                             ['uma materia', 'uma notícia', 'uma matéria', 'um artigo'])
         
         k_final = 1 if quer_apenas_um else k
         
-        docs = vectorstore.similarity_search(
-            pergunta, 
-            k=k_final, 
+        sourceDocs = vectorstore.similarity_search(
+            pergunta,
+            k=20,                 
             filter=filtro_data
         )
-        
-        # Remove duplicados
+
+        docs_ordenados = sorted(
+            sourceDocs,
+            key=lambda d: d.metadata.get("data", ""),
+            reverse=True
+        )
+        docs = docs_ordenados[:k_final]
+
         vistos = set()
         docs_unicos = []
         for doc in docs:
