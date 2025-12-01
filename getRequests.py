@@ -45,7 +45,7 @@ def limpar_caracteres_agressivo(texto):
     return texto.strip()
 
 
-def atualizar_db_com_wp(url="https://neofeed.com.br/wp-json/wp/v2/posts", page="1"):
+def atualizar_db_com_wp(url="https://neofeed.com.br/wp-json/wp/v2/posts", page="2"):
     print(f"📡 Buscando posts em: {url}")
 
     headers = {
@@ -92,6 +92,8 @@ def atualizar_db_com_wp(url="https://neofeed.com.br/wp-json/wp/v2/posts", page="
         
         data_publicacao = p.get("date", "")[:10]
         conteudo_html = p.get("content", {}).get("rendered", "")
+
+        print(data_publicacao)
 
         soup = BeautifulSoup(conteudo_html, "html.parser")
         
