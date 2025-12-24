@@ -1,6 +1,6 @@
 # Ignorar secrets do Streamlit
 .streamlit/secrets.toml
-chroma_db/*
+core/db/chroma_db/*
 __pycache__/*
 #env
 .env

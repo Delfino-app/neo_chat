@@ -3,7 +3,7 @@ from core.rag.rag import chatMessage
 from core.rag.rag import initRag
 
 if "chain" not in st.session_state:
-    st.session_state.chain, st.session_state.get_session_history = initRag()
+    st.session_state.chain, st.session_state.get_session_history, st.session_state.retriever, st.session_state.format_docs = initRag()
 
 st.set_page_config(page_title="Chat RAG - NeoFeed", page_icon="🧠", layout="centered")
 

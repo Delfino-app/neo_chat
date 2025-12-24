@@ -46,48 +46,22 @@ def initRag():
         streaming=True
     )
 
-    def format_docs(docs):
-        formatted = []        
-        for doc in docs:
-
-            doc_info = []
-            
-
-            if doc.metadata.get('titulo'):
-                doc_info.append(f"Título: {doc.metadata['titulo']}")
-            
-            doc_info.append(f"Conteúdo: {doc.metadata['conteudo']}")
-
-            if doc.metadata.get('categoria'):
-                doc_info.append(f"Categoria: {doc.metadata['categoria']}")
-            if doc.metadata.get('link'):
-                doc_info.append(f"Link: {doc.metadata['link']}")
-            if doc.metadata.get('data'):
-                doc_info.append(f"Data: {doc.metadata['data']}")
-            if doc.metadata.get('autor'):
-                doc_info.append(f"Autor: {doc.metadata['autor']}")
-            
-            formatted.append("\n".join(doc_info))
-        
-        return "\n\n---\n\n".join(formatted)
-
     if "data_hoje" not in st.session_state:
         st.session_state.data_hoje = datetime.now().strftime("%Y-%m-%d")
     
     data_hoje = st.session_state.data_hoje
 
-    from core.helpers.chatHelper import customRetrievel
+    from core.helpers.chatHelper import customRetrievel, format_docs
     retriever_com_filtro = customRetrievel(vectorstore, k=3)
 
-    retrieval_chain = {
+    base_chain = {
         "input": itemgetter("input"),
         "history": itemgetter("history"),
+        "context": itemgetter("context"),
         "data_atual": lambda x: data_hoje
-    } | RunnablePassthrough.assign(
-        context=itemgetter("input") | retriever_com_filtro | format_docs
-    )
+    }
 
-    rag_chain = retrieval_chain | prompt | llm
+    rag_chain = base_chain | prompt | llm
 
     store = {}
     def get_session_history(session_id: str) -> BaseChatMessageHistory:
@@ -106,35 +80,55 @@ def initRag():
         history_messages_key="history"
     )
 
-    return chain_with_history, get_session_history
+    return chain_with_history, get_session_history, retriever_com_filtro, format_docs
+
 def chatMessage(pergunta):
-    
+
     chain = st.session_state.chain
     get_session_history = st.session_state.get_session_history
+    retriever = st.session_state.retriever
+    format_docs = st.session_state.format_docs
 
     if 'chat_session_id' not in st.session_state:
         st.session_state.chat_session_id = f"session_{int(time.time())}"
-    
+
     session_id = st.session_state.chat_session_id
-
     history = get_session_history(session_id)
-    
-    try:
 
+    if "working_context" not in st.session_state:
+        st.session_state.working_context = None
+
+    try:
         if not pergunta.strip():
-            yield "Por favor, faça uma pergunta sobre as matérias disponíveis no Neofeed."
+            yield "Por favor, faça uma pergunta sobre as matérias disponíveis no NeoFeed."
             return
-        
+
         history.add_user_message(pergunta)
         resposta_final = ""
 
+        from core.helpers.chatHelper import should_retrieve
+
+        if st.session_state.working_context and not should_retrieve(pergunta, st.session_state.working_context):
+            print("DEBUG - Usando contexto já existente...")
+            contexto = st.session_state.working_context
+        else:
+            print("DEBUG - Realizando retrieval de documentos...")
+            docs = retriever.invoke(pergunta)
+            contexto = format_docs(docs)
+            st.session_state.working_context = contexto
+            print(f"DEBUG - \n contexto: {contexto}")
+
+
+        payload = {
+            "input": pergunta,
+            "context": contexto
+        }
+
         response = chain.stream(
-            {
-               "input": pergunta,
-            },
+            payload,
             config={"configurable": {"session_id": session_id}}
         )
-        
+
         for chunk in response:
             if hasattr(chunk, 'content'):
                 texto = chunk.content.replace("$", "\\$")
@@ -144,55 +138,7 @@ def chatMessage(pergunta):
 
         if resposta_final.strip():
             history.add_ai_message(resposta_final)
-                
-    except Exception as e:
-        yield "Desculpe, ocorreu um erro ao processar sua pergunta. Tente novamente."
-        st.error(f"Erro no sistema: {str(e)}")
-        
-def chatMessages(pergunta):
-    
-    chain = st.session_state.chain
-    get_session_history = st.session_state.get_session_history
 
-    if 'chat_session_id' not in st.session_state:
-        st.session_state.chat_session_id = f"session_{int(time.time())}"
-    
-    session_id = st.session_state.chat_session_id
-
-    history = get_session_history(session_id)
-    
-    try:
-
-        if not pergunta.strip():
-            yield "Por favor, faça uma pergunta sobre as matérias disponíveis no Neofeed."
-            return
-        
-        history.add_user_message(pergunta)
-        resposta_final = ""
-
-        retriever = st.session_state.retriever
-        from core.helpers.chatHelper import buscar_docs
-        input_texto = buscar_docs(pergunta,retriever)
-
-        response = chain.stream(
-            {
-               "input": input_texto or pergunta
-            },
-            config={"configurable": {"session_id": session_id}}
-        )
-        
-        for chunk in response:
-            if hasattr(chunk, 'content'):
-                texto = chunk.content.replace("$", "\\$")
-                resposta_final += texto
-                time.sleep(0.08)
-                yield texto
-
-               
-
-        if resposta_final.strip():
-            history.add_ai_message(resposta_final)
-                
     except Exception as e:
         yield "Desculpe, ocorreu um erro ao processar sua pergunta. Tente novamente."
         st.error(f"Erro no sistema: {str(e)}")

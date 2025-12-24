@@ -41,7 +41,8 @@ def load_documents_from_sql():
     
     documents = []
     for row in rows:
-        titulo, autor, categoria, data, link, conteudo, doc_id = row
+        titulo, categoria, autor, data, link, conteudo, doc_id = row
+
 
         titulo = titulo.replace('$', '\\$')
         conteudo = conteudo.replace('$', '\\$')
@@ -71,7 +72,6 @@ def load_documents_from_sql():
             }
         )
 
-
         documents.append(doc)
     
     conn.close()
@@ -94,9 +94,11 @@ def reloadVetorDB(embeddings,openai_api_key):
         chunk.metadata.update({
             "doc_type": "artigo",
             "titulo": chunk.metadata.get("titulo", ""),
+            "autor": chunk.metadata.get("autor", ""),
             "categoria": chunk.metadata.get("categoria", ""),
             "data": chunk.metadata.get("data", ""),
-            "autor": chunk.metadata.get("autor", "")
+            "link": chunk.metadata.get("link", ""),
+            "conteudo": chunk.metadata.get("conteudo", "")
         })
 
     embeddings = OpenAIEmbeddings(api_key=openai_api_key)

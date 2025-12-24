@@ -2,8 +2,13 @@ import sqlite3
 import pandas as pd
 import os
 
-def save(posts, arquivo_db="artigos.db"):
-    conn = sqlite3.connect(arquivo_db)
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, 'artigos.db')
+
+def save(posts):
+
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     try:
@@ -50,20 +55,20 @@ def save(posts, arquivo_db="artigos.db"):
     print(f"✅ Banco atualizado com {len(posts)} matérias (novos ou atualizados).")
 
 
-def load_posts(arquivo_db="artigos.db"):
-    conn = sqlite3.connect(arquivo_db)
+def load_posts():
+    conn = sqlite3.connect(DB_PATH)
     df = pd.read_sql("SELECT * FROM artigos", conn)
     conn.close()
     return df
 
 
-def load_posts_simplify(arquivo_db="artigos.db", limite=10):
+def load_posts_simplify(limite=10):
 
-    if not os.path.exists(arquivo_db):
-        print(f"Banco {arquivo_db} não encontrado.")
+    if not os.path.exists(DB_PATH):
+        print(f"Banco {DB_PATH} não encontrado.")
         return
 
-    conn = sqlite3.connect(arquivo_db)
+    conn = sqlite3.connect(DB_PATH)
     query = f"SELECT doc_id, titulo, categoria, data, link, conteudo, autor FROM artigos ORDER BY data DESC LIMIT {limite}"
     df = pd.read_sql(query, conn)
     conn.close()
@@ -83,13 +88,13 @@ def load_posts_simplify(arquivo_db="artigos.db", limite=10):
     return df  # opcional, pra usar em outras funções
 
 
-def clean_db(arquivo_db="artigos.db"):
+def clean_db():
    
-    if not os.path.exists(arquivo_db):
-        print(f"Banco {arquivo_db} não encontrado.")
+    if not os.path.exists(DB_PATH):
+        print(f"Banco {DB_PATH} não encontrado.")
         return
 
-    conn = sqlite3.connect(arquivo_db)
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     # Garante que a tabela exista
@@ -109,9 +114,9 @@ def clean_db(arquivo_db="artigos.db"):
     conn.commit()
     conn.close()
 
-    print(f"Todos os dados foram removidos da tabela 'artigos' em {arquivo_db}.")
+    print(f"Todos os dados foram removidos da tabela 'artigos' em {DB_PATH}.")
 
 if __name__ == "__main__":
     # Teste simples do streaming
-    clean_db()
+    load_posts_simplify()
     print()
