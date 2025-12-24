@@ -1,6 +1,6 @@
 import streamlit as st
-from rag import chatMessage
-from rag import initRag
+from core.rag.rag import chatMessage
+from core.rag.rag import initRag
 
 if "chain" not in st.session_state:
     st.session_state.chain, st.session_state.get_session_history = initRag()

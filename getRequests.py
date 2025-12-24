@@ -1,4 +1,4 @@
-from storage import save
+from core.db.storage import save
 from datetime import datetime
 import requests
 from bs4 import BeautifulSoup
@@ -7,7 +7,7 @@ import re
 from urllib.parse import urlparse
 
 def limpar_caracteres_agressivo(texto):
-    """Limpeza mais robusta para conteúdo da web"""
+    
     if not texto:
         return ""
     
@@ -89,6 +89,10 @@ def atualizar_db_com_wp(url="https://neofeed.com.br/wp-json/wp/v2/posts", page="
         if not post_id:
             continue
 
+        link = p.get("link", "").strip()
+        if any(proibido in link for proibido in ['/brand-stories/', '/apresentado-por-']):
+            continue
+
         
         data_publicacao = p.get("date", "")[:10]
         conteudo_html = p.get("content", {}).get("rendered", "")
@@ -105,8 +109,6 @@ def atualizar_db_com_wp(url="https://neofeed.com.br/wp-json/wp/v2/posts", page="
         
         titulo_html = p.get("title", {}).get("rendered", "")
         titulo_limpo = limpar_caracteres_agressivo(titulo_html)
-
-        link = p.get("link", "").strip()
 
         parsed = urlparse(link)
         path_parts = parsed.path.strip("/").split("/")
