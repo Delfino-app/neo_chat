@@ -139,5 +139,99 @@ def atualizar_db_com_wp(url="https://neofeed.com.br/wp-json/wp/v2/posts", page="
     except Exception as e:
         print(f"Erro ao salvar no banco: {e}")
 
+        
+def fetch_posts(url="https://neofeed.com.br/wp-json/wp/v2/posts", page=1):
+    logs = []
+    logs.append(f"📡 Buscando posts - Página {page}")
+
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json",
+        "Referer": "https://neofeed.com.br/",
+    }
+
+    try:
+        resp = requests.get(
+            url,
+            params={
+                "per_page": 10,
+                "page": page,
+                "_fields": "id,date,title,content,link,yoast_head_json"
+            },
+            headers=headers,
+            timeout=30
+        )
+
+        resp.encoding = "utf-8"
+
+        if resp.status_code == 403:
+            return {"status": "error", "logs": ["🚫 Erro 403: acesso bloqueado"]}
+
+        resp.raise_for_status()
+
+    except Exception as e:
+        return {"status": "error", "logs": [f"❌ Erro na requisição: {e}"]}
+
+    posts = resp.json()
+    if not posts:
+        return {"status": "empty", "logs": ["ℹ️ Nenhum post encontrado"]}
+
+    novos = []
+
+    for p in posts:
+        post_id = p.get("id")
+        if not post_id:
+            continue
+
+        link = p.get("link", "").strip()
+        if any(x in link for x in ["/brand-stories/", "/apresentado-por/"]):
+            continue
+
+        data_publicacao = p.get("date", "")[:10]
+        conteudo_html = p.get("content", {}).get("rendered", "")
+
+        soup = BeautifulSoup(conteudo_html, "html.parser")
+        for tag in soup(["script", "style", "meta", "link"]):
+            tag.decompose()
+
+        conteudo = limpar_caracteres_agressivo(
+            soup.get_text(separator=" ", strip=True)
+        )
+
+        titulo = limpar_caracteres_agressivo(
+            p.get("title", {}).get("rendered", "")
+        )
+
+        parsed = urlparse(link)
+        categoria = parsed.path.strip("/").split("/")[0]
+
+        autor = limpar_caracteres_agressivo(
+            p.get("yoast_head_json", {}).get("author", "")
+        )
+
+        novos.append({
+            "doc_id": f"artigo-{post_id}",
+            "titulo": titulo,
+            "conteudo": conteudo,
+            "categoria": categoria,
+            "autor": autor,
+            "data": data_publicacao,
+            "link": link,
+        })
+
+    if not novos:
+        return {"status": "empty", "logs": ["ℹ️ Nenhum post válido após limpeza"]}
+
+    try:
+        save(novos)
+        for post in novos:
+            logs.append(f"- {post['titulo']}")
+        logs.append(f"✅ {len(novos)} posts da página {page} indexados com sucesso!")
+        return {"status": "success", "logs": logs}
+
+    except Exception as e:
+        return {"status": "error", "logs": [f"❌ Erro ao salvar: {e}"]}
+
+
 if __name__ == "__main__":
     atualizar_db_com_wp()

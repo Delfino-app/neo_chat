@@ -1,5 +1,6 @@
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
+from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import os
 
@@ -36,18 +37,15 @@ def load_documents_from_sql():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    cursor.execute("SELECT titulo, categoria, autor, data, link, conteudo, doc_id FROM artigos")
+    cursor.execute("SELECT titulo, categoria, autor, data, link, conteudo, doc_id FROM artigos ORDER BY data DESC")
     rows = cursor.fetchall()
     
     documents = []
     for row in rows:
         titulo, categoria, autor, data, link, conteudo, doc_id = row
 
-
         titulo = titulo.replace('$', '\\$')
         conteudo = conteudo.replace('$', '\\$')
-
-        from langchain_core.documents import Document
         
         doc = Document(
             page_content=f"""
@@ -111,3 +109,62 @@ def reloadVetorDB(embeddings,openai_api_key):
     )
     
     return vectorstore
+
+def addDocumentToVectorstore(doc: dict, openai_api_key: str):
+
+    embeddings = OpenAIEmbeddings(api_key=openai_api_key)
+
+    vectorstore = Chroma(
+        persist_directory=CHROMA_DB_PATH,
+        embedding_function=embeddings,
+        collection_name=DB_NAME
+    )
+
+    titulo = doc["titulo"].replace('$', '\\$')
+    conteudo = doc["conteudo"].replace('$', '\\$')
+
+    document = Document(
+        page_content=f"""
+        Título: {titulo}
+        Categoria: {doc['categoria']}
+        Autor: {doc['autor']}
+        Data: {doc.get('data', '')}
+        Link: {doc['link']}
+
+        Conteúdo:
+        {conteudo}
+        """,
+        metadata={
+            "doc_id": doc["doc_id"],
+            "titulo": titulo,
+            "autor": doc["autor"],
+            "categoria": doc["categoria"],
+            "data": doc.get("data", ""),
+            "link": doc["link"],
+            "conteudo": conteudo,
+            "doc_type": "artigo"
+        }
+    )
+
+    # Chunking
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=800,
+        chunk_overlap=100,
+        separators=["\n\n", "\n", ". ", "! ", "? ", " ", ""]
+    )
+
+    chunks = splitter.split_documents([document])
+
+    # Evita duplicação (muito importante)
+    existing_ids = vectorstore.get(
+        where={"doc_id": doc["doc_id"]}
+    )["ids"]
+
+    if existing_ids:
+        vectorstore.delete(ids=existing_ids)
+
+    # Adiciona novos chunks
+    vectorstore.add_documents(chunks)
+    vectorstore.persist()
+
+    return len(chunks)

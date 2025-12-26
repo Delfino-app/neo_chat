@@ -111,6 +111,7 @@ def format_docs(docs):
     return "\n\n---\n\n".join(formatted)
 
 def should_retrieve(pergunta, working_context):
+    
     if working_context:
         followup_gatilhos = [
             "resume", "resuma", "resumo",

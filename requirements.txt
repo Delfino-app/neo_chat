@@ -5,6 +5,9 @@ chromadb
 tiktoken
 pandas
 
+fastapi
+uvicorn
+
 # --- Banco de dados e manipulação de dados ---
 python-dotenv
 
